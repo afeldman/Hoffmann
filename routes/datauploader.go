@@ -1,78 +1,33 @@
 package routes
 
 import (
-	"hoffmann/dataloader"
-	"io/ioutil"
-	"mime"
+	"errors"
+	"io"
+	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 )
 
-func HTTPUploader(w http.ResponseWriter, r *http.Request) {
-	dataloader.EnsureDir(dataloader.FileStorage.Path)
-	dataloader.EnsureDir(dataloader.FileStorage.TempPath)
+func UploadFile(w http.ResponseWriter, r *http.Request) {
+	file, handler, err := r.FormFile("file")
 
-	if r.Method != "POST" || r.Header.Get("Session-ID") == "" || r.Header.Get("Content-Range") == "" {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Invalid request."))
-	}
+	fileName := handler.Filename
 
-	var upload dataloader.UploadFile
+	upload_filepath := filepath.Join(os.Getenv("FILE_STORAGE"), "upload")
 
-	sessionID := r.Header.Get("Session-ID")
-	contentRange := r.Header.Get("Content-Range")
-
-	body, err := ioutil.ReadAll(r.Body)
-	dataloader.CheckError(err)
-
-	totalSize, partFrom, partTo := dataloader.ParseContentRange(contentRange)
-
-	if partFrom == 0 {
-		_, ok := dataloader.Files[sessionID]
-		if !ok {
-			w.WriteHeader(http.StatusCreated)
-
-			_, params, err := mime.ParseMediaType(r.Header.Get("Content-Disposition"))
-			dataloader.CheckError(err)
-			fileName := params["filename"]
-
-			newFile := dataloader.FileStorage.TempPath + "/" + sessionID
-			_, err = os.Create(newFile)
-			dataloader.CheckError(err)
-
-			f, err := os.OpenFile(newFile, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
-			dataloader.CheckError(err)
-
-			dataloader.Files[sessionID] = dataloader.UploadFile{
-				File:     f,
-				Name:     fileName,
-				TempPath: newFile,
-				Status:   dataloader.CREATED,
-				Size:     totalSize,
-			}
+	if _, err := os.Stat(upload_filepath); errors.Is(err, os.ErrNotExist) {
+		err := os.Mkdir(upload_filepath, os.ModePerm)
+		if err != nil {
+			log.Println(err)
 		}
-	} else {
-		w.WriteHeader(http.StatusOK)
 	}
 
-	upload = dataloader.Files[sessionID]
-	upload.Status = dataloader.UPLOADING
-
-	_, err = upload.File.Write(body)
-	dataloader.CheckError(err)
-
-	upload.File.Sync()
-	upload.Transfered = partTo
-
-	w.Header().Set("Content-Length", string(len(body)))
-	w.Header().Set("Connection", "close")
-	w.Header().Set("Range", contentRange)
-	w.Write([]byte(contentRange))
-
-	if partTo >= totalSize {
-		dataloader.MoveToPath(sessionID)
-		upload.File.Close()
-		delete(dataloader.Files, sessionID)
+	f, err := os.OpenFile(filepath.Join(upload_filepath, fileName), os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		panic(err)
 	}
-
+	defer f.Close()
+	_, _ = io.WriteString(w, "File "+fileName+" Uploaded successfully")
+	_, _ = io.Copy(f, file)
 }

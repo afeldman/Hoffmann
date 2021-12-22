@@ -1,3 +1,4 @@
+/**/
 package main
 
 import (
@@ -21,9 +22,11 @@ func main() {
 	}
 
 	r := mux.NewRouter()
+
 	r.NotFoundHandler = http.HandlerFunc(Handle404)
+
 	r.HandleFunc("/", routes.Home)
-	r.HandleFunc("/data", routes.HTTPUploader)
+	r.HandleFunc("/file", routes.UploadFile).Methods("POST")
 
 	log.Fatal(http.ListenAndServe(os.Getenv("SERVER_ADDRESS")+":"+os.Getenv("SERVER_PORT"), r))
 }
