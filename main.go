@@ -2,6 +2,7 @@
 package main
 
 import (
+	"hoffmann/hoffmanndb"
 	"hoffmann/routes"
 	"net/http"
 	"os"
@@ -20,6 +21,9 @@ func main() {
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
+
+	// create the database
+	hoffmanndb.NewHoffmannDB()
 
 	r := mux.NewRouter()
 
